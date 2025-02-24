@@ -3895,10 +3895,10 @@ int genviews() {
 					genrotmat('z', phi, Rphi);
 
 					/* Multiply the transformation matrices */
-					multmat(3,3,3,T_0,Tz,T); /* kz scale T = T_0 * Tz */
-					multmat(3,3,3,Rz,T,T); /* z rotation (arm-to-arm) T = Rz * T */
+					multmat(3,3,3,Rz,Tz,T); /* z rotation (arm-to-arm) T = Rz * T */
 					multmat(3,3,3,Rtheta,T,T); /* polar angle rotation T = Rtheta * T */
 					multmat(3,3,3,Rphi,T,T); /* azimuthal angle rotation T = Rphi * T */
+					multmat(3,3,3,T_0,T,T); /* spiral plane rotation (axial, coronal, etc.) */
 
 					/* if the rotations are external we re-calculate 
 					the transformation using the values from the file instead*/
