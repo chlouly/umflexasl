@@ -1422,7 +1422,7 @@ STATUS predownload( void )
 	pw_gzw2 = tmp_pw;
 	pw_gzw2a = tmp_pwa;
 	pw_gzw2d = tmp_pwd;
-	a_gzw2 = tmp_a;
+	a_gzw2 = -tmp_a;
 
 	/* set parameters for flowcomp pre-phaser */
 	tmp_area = 2*M_PI/(GAMMA*1e-6) * kzmax; /* multiply by 2 if flow compensated */
@@ -2961,6 +2961,7 @@ STATUS prescanCore() {
 
 	int ttotal; 
 	float arf1_var = 0.0;
+	float tmpmax;
 
 	/* initialize the rotation matrix */
 	setrotate( tmtx0, 0 );
@@ -3050,16 +3051,26 @@ STATUS prescanCore() {
 					eg2: 
 						90x - 180y - 180y - 180y -180y ...  */
 
-					arf1_var = a_rf0 + a_rf1/2;
+					arf1_var = (a_rf180 + a_rf1)/2;
 				}
 				if(varflip) {
 					/* variable flip angle refocuser pulses to get more signal 
 					- linearly increasing schedule */
-					arf1_var = a_rf1 + (float)echon*(arf180 - a_rf1)/(float)(opetl-1); 
+					/* arf1_var = a_rf1 + (float)echon*(arf180 - a_rf1)/(float)(opetl-1); */
 					
-					/* in VFA, the first refocusers are higher - trying to approximate that here*/
-					if(echon==0) arf1_var = (arf180 + a_rf1)/2.0;
-						
+					/* in VFA, the first refocusers are higher - rying to approximate that here*/
+					/* if(echon==0) arf1_var = (arf180 + a_rf1)/2.0;  */
+						    
+					/* New approach: do a quadrative schedule with 
+					the minimum of parabola occurring at one quarter of the way in the echo train  */
+		    			arf1_var = ((float)(echon) - (float)(opetl)/4.0) * ((float)(echon) - (float)(opetl)/4.0);  /* shifted parabola */
+					tmpmax = ((float)(opetl-1) - (float)(opetl)/4.0) *  ((float)(opetl-1) - (float)(opetl)/4.0) ;    /* max value of the parabola */
+					arf1_var *= (arf180 - a_rf1) / tmpmax; /* scale */
+					arf1_var += a_rf1;  /* shift up */
+
+					/* but we cap it at 90 degree pulse */
+    					if (arf1_var > arf180/2.0) arf1_var = arf180/2.0;;
+
 				}
 
 			
@@ -3150,6 +3161,7 @@ STATUS scan( void )
 	int pcasl_type, prep1_type, prep2_type;
 
 	float arf1_var = 0;
+	float tmpmax;
 
 	fprintf(stderr, "scan(): beginning scan (t = %d / %.0f us)...\n", ttotal, pitscan);
 
@@ -3455,16 +3467,29 @@ STATUS scan( void )
 							eg2: 
 								90x - 180y - 180y - 180y -180y ...  */
 
-							arf1_var = a_rf0 + a_rf1/2;
+							arf1_var = (a_rf180 + a_rf1)/2;
 						}
 						
 						if(varflip) {
+
 							/* variable flip angle refocuser pulses to get more signal 
 							- linearly increasing schedule */
-							arf1_var = a_rf1 + (float)echon*(arf180-a_rf1)/(float)(opetl-1); 
-
+							/* arf1_var = a_rf1 + (float)echon*(arf180 - a_rf1)/(float)(opetl-1); */
+							
 							/* in VFA, the first refocusers are higher - trying to approximate that here*/
-							if(echon==0) arf1_var = (arf180 + a_rf1)/2.0;
+							/* if(echon==0) arf1_var = (arf180 + a_rf1)/2.0;  */
+									
+							/* New approach: do a quadrative schedule with 
+							the minimum of parabola occurring at one quarter of the way in the echo train  */
+		    					arf1_var = ((float)(echon) - (float)(opetl)/4.0) * ((float)(echon) - (float)(opetl)/4.0);  /* shifted parabola */
+							tmpmax = ((float)(opetl-1) - (float)(opetl)/4.0) *  ((float)(opetl-1) - (float)(opetl)/4.0) ;    /* max value of the parabola */
+							arf1_var *= (arf180 - a_rf1) / tmpmax; /* scale */
+							arf1_var += a_rf1;  /* shift up */
+
+							/* but we cap it at 90 degree pulse */
+							if (arf1_var > arf180/2.0) arf1_var = arf180/2.0;;
+
+
 						}
 
 					
@@ -3855,13 +3880,16 @@ int genviews() {
 					}
 
 					/* Set the z-axis rotation angles and kz step (as a fraction of kzmax) */ 
-					rz = M_PI * (float)armn / (float)narms;
-					if (ro_type == 2) /* spiral out */
-						rz *= 2;	
+					rz = 2* M_PI * (float)armn / (float)narms;
 					phi = 0.0;
 					theta = 0.0;
 					dz = 0.0;
 
+					/* the spiral in-out case rotates by only 90 degreesq  -
+					This happens in FSE and SSFP readouts*/
+					if (ro_type != 2) 
+						rz /= 2;
+					
 					switch (spi_mode) {
 						case 0: /* SOS */
 							phi = 0.0;
@@ -3871,12 +3899,22 @@ int genviews() {
 						case 1: /* 2D TGA */
 							phi = 0.0;
 							theta = 2* M_PI /phi2D * (shotn*opetl + echon);
+							
+							/* test: use the arms, instead of the shots to advance the angle*/
+							theta = 2* M_PI /phi2D * (armn*opetl + echon);
+							
 							dz = 0.0;
 							break;
 						case 2: /* 3D TGA */
+
 							/* using the fiboancci sphere formulas */
 							theta = (float)(shotn*opetl + echon)*2*M_PI / phi2D; /* polar angle */
 							phi = acos(1 - 2*(float)(shotn*opetl + echon)/(float)(opnshots*opetl)); /* azimuthal angle */
+							
+							/* test: use the arms, instead of the shots to advance the angle*/
+							theta = (float)(armn*opetl + echon)*2*M_PI / phi2D; /* polar angle */
+							phi = acos(1 - 2*(float)(armn*opetl + echon)/(float)(narms*opetl)); /* azimuthal angle */
+							
 							if (mrf_mode==1){
 								theta += prev_theta;
 								phi += prev_phi;
@@ -3898,7 +3936,7 @@ int genviews() {
 					multmat(3,3,3,Rz,Tz,T); /* z rotation (arm-to-arm) T = Rz * T */
 					multmat(3,3,3,Rtheta,T,T); /* polar angle rotation T = Rtheta * T */
 					multmat(3,3,3,Rphi,T,T); /* azimuthal angle rotation T = Rphi * T */
-					multmat(3,3,3,T_0,T,T); /* spiral plane rotation (axial, coronal, etc.) */
+					multmat(3,3,3,T_0,T,T); /* kz scale T = T_0 * Tz */
 
 					/* if the rotations are external we re-calculate 
 					the transformation using the values from the file instead*/
