@@ -3051,7 +3051,7 @@ STATUS prescanCore() {
 					eg2: 
 						90x - 180y - 180y - 180y -180y ...  */
 
-					arf1_var = (a_rf180 + a_rf1)/2;
+					arf1_var = (arf180 + a_rf1)/2;
 				}
 				if(varflip) {
 					/* variable flip angle refocuser pulses to get more signal 
@@ -3467,7 +3467,7 @@ STATUS scan( void )
 							eg2: 
 								90x - 180y - 180y - 180y -180y ...  */
 
-							arf1_var = (a_rf180 + a_rf1)/2;
+							arf1_var = (arf180 + a_rf1)/2;
 						}
 						
 						if(varflip) {
