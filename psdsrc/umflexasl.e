@@ -241,6 +241,11 @@ int prep2_Npoints = 0 ;
 /* Velocity Selective prep pulse axis*/
 int prep_axis = 0;
 
+/* Cardiac Gating */
+int do_cardiac_gating = 0 with {0, 1, 0, VIS, "Flag to control cardiac gating. (1) Do Cardiac Gating. (0) Don't do Cardiac Gating"};
+int ophrep_val = 0 with {0, 100, 0, VIS, "Number of R-R intervals before the next pulse plays. Gets dumped into ophrep..."};
+
+
 /* Declare PCASL variables (cv)*/
 int pcasl_pld 	= 1500*1e3 with {0, , 0, VIS, "PCASL prep  : (ms) post-labeling delay ( includes background suppression)",};
 int pcasl_duration = 1500*1e3 with {0, , 0, VIS, "PCASL prep  : (ms) Labeling Duration)",}; /* this is the bolus duration, NOT the duration of a single cycle */
@@ -446,11 +451,42 @@ STATUS cvinit( void )
 	pifovval5 = 260;
 	pifovval6 = 280;
 
+	/* Cardiac Gating */
 	/* tr */
 	opautotr = PSD_MINIMUMTR;
 	pitrnub = 2;
 	pitrval2 = PSD_MINIMUMTR;
 	cvmax(optr,50s);
+
+	/* Cardiac Gating if (existcv(opcgate) && (opcgate == PSD_ON))
+                 
+         {
+                 tmptr = RUP_GRD((int)((float)(exist(ophrep))
+                                         *(60.0/exist(ophrate))* 1e6));
+                 pitrnub = 0;
+         }
+         else
+         {
+                 tmptr = optr;
+                 pitrnub = 2;
+                 if (oppseq == 2) * gradient echo *
+                 {
+                         pitrval2 = 80ms;
+                         pitrval3 = 250ms;
+                         pitrval4 = 500ms;
+                         pitrval5 = 1s;
+                         pitrval6 = 2s;
+                 }
+                 else
+                 {
+                         pitrval2 = 300ms;
+                         pitrval3 = 500ms;
+                         pitrval4 = 1s;
+                         pitrval5 = 1.5s;
+                         pitrval6 = 2s;
+                 }
+         } */
+
 
 	/* te */
 	opautote = PSD_MINTE;	
@@ -952,6 +988,37 @@ STATUS cveval( void )
 	cvmax(opuser42, 500);	
 	nm0frames = opuser42;
 
+	piuset2 += use43;
+	cvdesc(opuser43, "Do a presaturation pulse?");
+	cvdef(opuser43, 0);
+	opuser43= presat_flag;
+	cvmin(opuser43, 0);
+	cvmax(opuser43, 1);
+	presat_flag = opuser43;
+
+	/* Cardiac Gating - Dumping the visible CV into ophrep */
+	if (presat_flag)
+		piuset2 += use44;
+	cvdesc(opuser44, "Do Cardiac Gating (1) Yes, (0) No");
+	cvdef(opuser44, 0);
+	opuser44 = do_cardiac_gating;
+	cvmin(opuser44, 0);
+	cvmax(opuser44, 1);
+	do_cardiac_gating = opuser44;	
+
+	if (do_cardiac_gating) {
+		piuset2 += use45;
+	cvdesc(opuser45, "Number of R-Rs before the cardiac gate has been triggered");
+	cvdef(opuser45, 0);
+	opuser45 = ophrep_val;
+	cvmin(opuser45, 1);
+	cvmax(opuser45, 100);
+	ophrep_val = opuser45;
+	} else {
+	ophrep_val=0;
+	}
+	
+	ophrep = ophrep_val;
 
 
 @inline Prescan.e PScveval
@@ -1870,9 +1937,36 @@ STATUS predownload( void )
 	entry_point_table[L_MPS2].epprexres = acq_len;
 
 	/* set sequence clock */
+	if (do_cardiac_gating && (exist(opcgate) == PSD_ON) && existcv(opcgate))         {
+                 pidmode = PSD_CLOCK_CARDIAC;
+                 /*piviews = nextra+nl*nframes;*/
+                 piclckcnt = ophrep;
+                 /*pitscan = (float)(optr)*nbang/opslquant;*/
+                 pitslice = optr;
+
+		fprintf(stderr, "\n\n\nSTTING CARDIAC GATING CLOCK -- DEBUG\n\n\n");
+        }
+        else
+        {
+                 pidmode = PSD_CLOCK_NORM;
+                 pitslice = optr;
+                 /*pitscan = (float)(optr)*nbang;*/
+        }
+        pitscan = (nframes*narms*opnshots + ndisdaqtrains)*optr;
+
+
+
+
+	/* ORIGINAL B4 CARDIAC GATING...
+
+	 set sequence clock 
 	pidmode = PSD_CLOCK_NORM;
 	pitslice = optr;
-	pitscan = (nframes*narms*opnshots + ndisdaqtrains) * optr; /* pitscan controls the clock time on the interface */	
+	pitscan = (nframes*narms*opnshots + ndisdaqtrains) * optr;   pitscan controls the clock time on the interface /	
+
+	*/
+
+
 	
 	/* Set up Tx/Rx frequencies */
 	for (slice = 0; slice < opslquant; slice++) rsp_info[slice].rsprloc = 0;
@@ -2515,8 +2609,27 @@ int play_presat() {
 	fprintf(stderr, "\tplay_presat(): playing asl pre-saturation pulse (%d us)...\n", dur_presatcore + TIMESSI);
 
 	boffset(off_presatcore);
+	if (do_cardiac_gating) {
+		settrigger(TRIG_ECG, 0);
+		fprintf(stderr, "play_presat(): Setting ECG Trigger\n");
+
+		boffset(off_presatcore);
+		startseq(0, MAY_PAUSE);
+
+		settrigger(TRIG_INTERN, 0);
+		fprintf(stderr, "play_presat(): Setting back to internal trigger\n");
+	} else {
+		boffset(off_presatcore);
+		startseq(0, MAY_PAUSE);
+
+		settrigger(TRIG_INTERN, 0);
+	}
+
+	/* Cardiac Gating
 	startseq(0, MAY_PAUSE);
 	settrigger(TRIG_INTERN, 0);
+	*/
+
 
 	/* play the pre-saturation delay */
 	fprintf(stderr, "scan(): playing asl pre-saturation delay (%d us)...\n", presat_delay);
