@@ -3159,15 +3159,16 @@ STATUS prescanCore() {
 						90x - 150y - 120y - 120y -120y ...
 					eg2: 
 						90x - 180y - 180y - 180y -180y ...  */
-
+				/* MERGE */
 					arf1_var = (arf180 + a_rf1)/2;
+					/*arf1_var = (a_rf180 + a_rf1)/2;*/
 				}
 				if(varflip) {
 					/* variable flip angle refocuser pulses to get more signal 
 					- linearly increasing schedule */
 					/* arf1_var = a_rf1 + (float)echon*(arf180 - a_rf1)/(float)(opetl-1); */
 					
-					/* in VFA, the first refocusers are higher - rying to approximate that here*/
+					/* in VFA, the first refocusers are higher - trying to approximate that here*/
 					/* if(echon==0) arf1_var = (arf180 + a_rf1)/2.0;  */
 						    
 					/* New approach: do a quadrative schedule with 
@@ -3575,8 +3576,9 @@ STATUS scan( void )
 								90x - 150y - 120y - 120y -120y ...
 							eg2: 
 								90x - 180y - 180y - 180y -180y ...  */
-
+						/* MERGE */
 							arf1_var = (arf180 + a_rf1)/2;
+							/*arf1_var = (a_rf180 + a_rf1)/2;*/
 						}
 						
 						if(varflip) {
