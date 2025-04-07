@@ -1013,12 +1013,8 @@ STATUS cveval( void )
 	opuser45 = ophrep_val;
 	cvmin(opuser45, 1);
 	cvmax(opuser45, 100);
-	ophrep_val = opuser45;
-	} else {
-	ophrep_val=0;
-	}
-	
-	ophrep = ophrep_val;
+	ophrep = opuser45;
+	}	
 
 
 @inline Prescan.e PScveval
